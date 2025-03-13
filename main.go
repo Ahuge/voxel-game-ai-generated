@@ -97,13 +97,20 @@ type Game struct {
 	lastFrame    float64
 	firstMouse   bool
 	lastX, lastY float64
+	// Pause menu related fields
+	paused      bool
+	menuOption  int
+	menuOptions []string
 }
 
 // NewGame creates a new game instance
 func NewGame(window *glfw.Window) *Game {
 	game := &Game{
-		window:     window,
-		firstMouse: true,
+		window:      window,
+		firstMouse:  true,
+		paused:      false,
+		menuOption:  0,
+		menuOptions: []string{"Resume", "Regenerate World", "Exit"},
 	}
 
 	// Initialize camera
@@ -132,11 +139,14 @@ func (g *Game) Update() {
 	g.deltaTime = currentFrame - g.lastFrame
 	g.lastFrame = currentFrame
 
-	// Update player
-	g.player.Update(g.deltaTime, g.window)
+	// Only update game elements if not paused
+	if !g.paused {
+		// Update player
+		g.player.Update(g.deltaTime, g.window)
 
-	// Update world
-	g.world.Update(g.deltaTime)
+		// Update world
+		g.world.Update(g.deltaTime)
+	}
 }
 
 // Render renders the game
@@ -153,48 +163,146 @@ func (g *Game) Render() {
 
 	// Render world
 	g.world.Render(g.shader)
+
+	// Render pause menu if game is paused
+	if g.paused {
+		g.renderPauseMenu()
+	}
+}
+
+// renderPauseMenu renders the pause menu
+func (g *Game) renderPauseMenu() {
+	// This is a simple implementation that prints the menu to the console
+	// In a real implementation, you would render this to the screen using OpenGL
+	fmt.Println("\n===== PAUSE MENU =====")
+	for i, option := range g.menuOptions {
+		if i == g.menuOption {
+			fmt.Printf("> %s <\n", option)
+		} else {
+			fmt.Printf("  %s  \n", option)
+		}
+	}
+	fmt.Println("=====================")
 }
 
 // KeyCallback handles key input
 func (g *Game) KeyCallback(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-	// Exit on escape
+	// Toggle pause menu on escape
 	if key == glfw.KeyEscape && action == glfw.Press {
-		window.SetShouldClose(true)
+		g.paused = !g.paused
+
+		// Toggle cursor visibility based on pause state
+		if g.paused {
+			window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
+		} else {
+			window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+		}
+		return
 	}
 
-	// Pass key events to player
-	g.player.KeyCallback(window, key, scancode, action, mods)
+	// Handle menu navigation when paused
+	if g.paused && action == glfw.Press {
+		switch key {
+		case glfw.KeyUp, glfw.KeyW:
+			// Move up in menu
+			g.menuOption--
+			if g.menuOption < 0 {
+				g.menuOption = len(g.menuOptions) - 1
+			}
+		case glfw.KeyDown, glfw.KeyS:
+			// Move down in menu
+			g.menuOption++
+			if g.menuOption >= len(g.menuOptions) {
+				g.menuOption = 0
+			}
+		case glfw.KeyEnter, glfw.KeySpace:
+			// Select menu option
+			g.selectMenuOption()
+		}
+		return
+	}
+
+	// Only pass key events to player if not paused
+	if !g.paused {
+		g.player.KeyCallback(window, key, scancode, action, mods)
+	}
 }
 
 // MouseCallback handles mouse movement
 func (g *Game) MouseCallback(window *glfw.Window, xpos, ypos float64) {
-	if g.firstMouse {
+	// Only process mouse movement if game is not paused
+	if !g.paused {
+		if g.firstMouse {
+			g.lastX = xpos
+			g.lastY = ypos
+			g.firstMouse = false
+		}
+
+		xoffset := xpos - g.lastX
+		yoffset := g.lastY - ypos // Reversed: y ranges bottom to top
+
 		g.lastX = xpos
 		g.lastY = ypos
-		g.firstMouse = false
+
+		g.camera.ProcessMouseMovement(float32(xoffset), float32(yoffset), true)
 	}
-
-	xoffset := xpos - g.lastX
-	yoffset := g.lastY - ypos // Reversed: y ranges bottom to top
-
-	g.lastX = xpos
-	g.lastY = ypos
-
-	g.camera.ProcessMouseMovement(float32(xoffset), float32(yoffset), true)
 }
 
 // MouseButtonCallback handles mouse button input
 func (g *Game) MouseButtonCallback(window *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-	if button == glfw.MouseButtonLeft && action == glfw.Press {
-		// Handle block placing
-		g.world.PlaceBlock(g.camera.Position, g.camera.Front)
-	} else if button == glfw.MouseButtonRight && action == glfw.Press {
-		// Handle block breaking (mining)
-		g.world.BreakBlock(g.camera.Position, g.camera.Front)
+	// Only handle mouse input if not paused
+	if !g.paused {
+		if button == glfw.MouseButtonLeft && action == glfw.Press {
+			// Handle block placing
+			g.world.PlaceBlock(g.camera.Position, g.camera.Front)
+		} else if button == glfw.MouseButtonRight && action == glfw.Press {
+			// Handle block breaking (mining)
+			g.world.BreakBlock(g.camera.Position, g.camera.Front)
+		}
+	}
+}
+
+// selectMenuOption handles the selection of menu options
+func (g *Game) selectMenuOption() {
+	switch g.menuOption {
+	case 0: // Resume
+		// Unpause the game and hide cursor
+		g.paused = false
+		g.window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+
+	case 1: // Regenerate World
+		// Create a new world with a different seed
+		// First, clean up the old world resources
+		for _, chunk := range g.world.chunks {
+			chunk.Delete()
+		}
+
+		// Generate a new seed based on current time
+		newSeed := int64(glfw.GetTime() * 1000)
+
+		// Create a new world with the new seed
+		g.world = NewWorld()
+		g.world.terrainGen = NewTerrainGenerator(newSeed)
+
+		// Reset player position
+		g.camera.Position = mgl32.Vec3{0, 35, 10}
+		g.player.position = g.camera.Position
+		g.player.velocity = mgl32.Vec3{0, 0, 0}
+
+		// Unpause the game
+		g.paused = false
+		g.window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+
+	case 2: // Exit
+		// Close the window to exit the game
+		g.window.SetShouldClose(true)
 	}
 }
 
 // ScrollCallback handles scroll input
 func (g *Game) ScrollCallback(window *glfw.Window, xoffset, yoffset float64) {
-	g.camera.ProcessMouseScroll(float32(yoffset))
+	// Only process scroll input if game is not paused
+	if !g.paused {
+		g.camera.ProcessMouseScroll(float32(yoffset))
+	}
 }
