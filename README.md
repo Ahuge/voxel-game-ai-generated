@@ -17,8 +17,10 @@ A 3D voxel-based game built with Go and OpenGL. This project implements a Minecr
 ## Screenshots
 
 ### World Generation
-![Pause Menu](.github/images/menu.png)
 ![Gameplay](.github/images/gameplay.gif)
+
+### Pause Menu
+![Pause Menu](.github/images/menu.png)
 
 ### Blocks
 #### Dirt
