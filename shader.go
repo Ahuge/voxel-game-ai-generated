@@ -91,6 +91,27 @@ func (s *Shader) SetVec3(name string, value mgl32.Vec3) {
 	gl.Uniform3fv(gl.GetUniformLocation(s.ID, gl.Str(name+"\x00")), 1, &value[0])
 }
 
+// GetMat4 gets a mat4 uniform from the shader
+func (s *Shader) GetMat4(name string) mgl32.Mat4 {
+	// This is a simplified implementation that assumes the matrices are stored in the Go code
+	// In a real implementation, you might want to query the actual uniform value from OpenGL
+	// For now, we'll use this as a way to pass matrices between functions
+
+	// For view and projection matrices, we can get them from the current game instance
+	if currentGame != nil {
+		if name == "view" && currentGame.camera != nil {
+			return currentGame.camera.GetViewMatrix()
+		} else if name == "projection" {
+			// Recreate the projection matrix
+			w, h := currentGame.window.GetSize()
+			return mgl32.Perspective(mgl32.DegToRad(45.0), float32(w)/float32(h), 0.1, 1000.0)
+		}
+	}
+
+	// Return identity matrix as fallback
+	return mgl32.Ident4()
+}
+
 // SetMat4 sets a mat4 uniform value
 func (s *Shader) SetMat4(name string, value mgl32.Mat4) {
 	gl.UniformMatrix4fv(gl.GetUniformLocation(s.ID, gl.Str(name+"\x00")), 1, false, &value[0])

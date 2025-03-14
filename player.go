@@ -92,6 +92,11 @@ func (p *Player) Update(deltaTime float64, window *glfw.Window) {
 
 	// Update camera position
 	p.camera.Position = p.position
+
+	// Update player chunk position in world for chunk loading/unloading
+	if currentGame != nil && currentGame.world != nil {
+		currentGame.world.UpdatePlayerPosition(p.position)
+	}
 }
 
 // handleCollisions checks for collisions with blocks and adjusts player position

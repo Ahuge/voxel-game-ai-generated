@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-gl/gl/v4.1-core/gl"
-	"github.com/go-gl/glfw/v3.3/glfw"
-	"github.com/go-gl/mathgl/mgl32"
 	"log"
 	"math/rand/v2"
 	"runtime"
+
+	"github.com/go-gl/gl/v4.1-core/gl"
+	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 const (
@@ -55,10 +56,10 @@ func main() {
 	gl.Enable(gl.DEPTH_TEST)
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	// Temporarily disable face culling to see if blocks become visible
-	// gl.Enable(gl.CULL_FACE)
-	// gl.CullFace(gl.BACK)
-	// gl.FrontFace(gl.CCW)
+	// Enable face culling to improve performance
+	gl.Enable(gl.CULL_FACE)
+	gl.CullFace(gl.FRONT)
+	gl.FrontFace(gl.CCW)
 
 	// Create game instance
 
@@ -78,6 +79,11 @@ func main() {
 	// Capture cursor for first-person camera control
 	window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 
+	// FPS calculation variables
+	frameCount := 0
+	lastFPSTime := glfw.GetTime()
+	currentFPS := 0.0
+
 	// Main game loop
 	for !window.ShouldClose() {
 		gl.ClearColor(0.2, 0.3, 0.3, 1.0)
@@ -88,7 +94,16 @@ func main() {
 
 		window.SwapBuffers()
 		glfw.PollEvents()
-		// fmt.Printf("%f FPS\n", 1/game.deltaTime)
+
+		// Update FPS counter
+		frameCount++
+		currentTime := glfw.GetTime()
+		if currentTime-lastFPSTime >= 1.0 { // Update FPS every second
+			currentFPS = float64(frameCount) / (currentTime - lastFPSTime)
+			window.SetTitle(fmt.Sprintf("%s | FPS: %.1f", title, currentFPS))
+			frameCount = 0
+			lastFPSTime = currentTime
+		}
 	}
 }
 
@@ -109,6 +124,8 @@ type Game struct {
 	menuOptions []string
 	// UI system
 	ui *UI
+	// Frame counter for debugging
+	frameCount int
 }
 
 // NewGame creates a new game instance
@@ -150,6 +167,9 @@ func (g *Game) Update() {
 	g.deltaTime = currentFrame - g.lastFrame
 	g.lastFrame = currentFrame
 
+	// Increment frame counter for debugging
+	g.frameCount++
+
 	// Only update game elements if not paused
 	if !g.paused {
 		// Update player
@@ -166,7 +186,7 @@ func (g *Game) Render() {
 	g.shader.Use()
 
 	// Set view and projection matrices
-	projection := mgl32.Perspective(mgl32.DegToRad(45.0), float32(width)/float32(height), 0.1, 1000.0)
+	projection := mgl32.Perspective(mgl32.DegToRad(60.0), float32(width)/float32(height), 0.001, 500.0)
 	view := g.camera.GetViewMatrix()
 
 	g.shader.SetMat4("projection", projection)

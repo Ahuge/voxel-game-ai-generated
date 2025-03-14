@@ -2,17 +2,20 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-gl/gl/v4.1-core/gl"
-	"github.com/go-gl/mathgl/mgl32"
-	"io/ioutil"
+	"image"
+	"image/draw"
+	_ "image/png" // Register PNG decoder
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/go-gl/gl/v4.1-core/gl"
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Render distance constants
 const (
-	RenderDist = 16 // Increased from 1 to allow for better visibility
+	RenderDist = 10 // Increased from 16 to allow for better visibility
 )
 
 // World represents the voxel world
@@ -23,15 +26,19 @@ type World struct {
 	blockTexture   uint32
 	textures       map[string]uint32
 	playerChunkPos ChunkPos
+	frustum        *Frustum
+	chunkMeshCache map[ChunkPos]bool // Tracks which chunks have valid meshes
 }
 
 // NewWorld creates a new world instance
 func NewWorld(seed int64) *World {
 	world := &World{
-		chunks:        make(map[ChunkPos]*Chunk),
-		blockRegistry: NewBlockRegistry(),
-		terrainGen:    NewTerrainGenerator(seed), // Seed for terrain generation
-		textures:      make(map[string]uint32),
+		chunks:         make(map[ChunkPos]*Chunk),
+		blockRegistry:  NewBlockRegistry(),
+		terrainGen:     NewTerrainGenerator(seed), // Seed for terrain generation
+		textures:       make(map[string]uint32),
+		frustum:        NewFrustum(mgl32.Ident4(), mgl32.Ident4()), // Will be updated later
+		chunkMeshCache: make(map[ChunkPos]bool),
 	}
 
 	// Load block textures
@@ -44,20 +51,30 @@ func NewWorld(seed int64) *World {
 	return world
 }
 
-func (w *World) loadTexture(path string) []byte {
+func (w *World) loadTexture(path string) ([]byte, int, int) {
 	imgFile, err := os.Open(path)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
-		return nil
+		return nil, 0, 0
 	}
 	defer imgFile.Close()
-	imgFile.Seek(0, 0)
-	imgBytes, err := ioutil.ReadAll(imgFile)
+
+	// Use image package to decode the image
+	img, _, err := image.Decode(imgFile)
 	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return nil
+		fmt.Println("Error decoding image:", err)
+		return nil, 0, 0
 	}
-	return imgBytes
+
+	// Get image dimensions
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+
+	// Convert image to RGBA
+	rgbaImg := image.NewRGBA(bounds)
+	draw.Draw(rgbaImg, bounds, img, bounds.Min, draw.Src)
+
+	return rgbaImg.Pix, width, height
 }
 
 // loadTextures loads the block textures
@@ -106,7 +123,12 @@ func (w *World) loadTextures() {
 
 		if !info.IsDir() && strings.HasSuffix(strings.ToLower(path), ".png") {
 			fmt.Println("Found PNG:", path)
-			byteImage := w.loadTexture(path)
+			byteImage, imgWidth, imgHeight := w.loadTexture(path)
+			if byteImage == nil {
+				fmt.Println("Failed to load texture:", path)
+				return nil
+			}
+
 			var textureImage uint32
 			gl.GenTextures(1, &textureImage)
 			gl.BindTexture(gl.TEXTURE_2D, textureImage)
@@ -115,10 +137,13 @@ func (w *World) loadTextures() {
 			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 
-			gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(byteImage))
+			gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(imgWidth), int32(imgHeight), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(byteImage))
 			gl.GenerateMipmap(gl.TEXTURE_2D)
-			// Perform operations on the PNG file here, e.g., open and process it
-			w.textures[strings.Split(filepath.Base(path), ".")[0]] = textureImage
+
+			// Store texture with block name (without extension)
+			blockName := strings.Split(filepath.Base(path), ".")[0]
+			fmt.Println("Loaded texture for block:", blockName)
+			w.textures[blockName] = textureImage
 		}
 		return nil
 	})
@@ -168,18 +193,58 @@ func (w *World) Update(deltaTime float64) {
 
 // Render renders the world
 func (w *World) Render(shader *Shader) {
-	// Bind texture
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, w.blockTexture)
+	// Set texture unit for the shader
 	shader.SetInt("texture1", 0)
 
 	// Set model matrix (identity for world)
 	model := mgl32.Ident4()
 	shader.SetMat4("model", model)
 
-	// Render all chunks
+	// Get the current view and projection matrices from the shader
+	view := shader.GetMat4("view")
+	projection := shader.GetMat4("projection")
+
+	// Update the frustum with current matrices
+	w.frustum.Update(projection, view)
+
+	// Set view position for lighting in the shader
+	// This assumes the camera position is available
+	if currentGame != nil && currentGame.camera != nil {
+		shader.SetVec3("viewPos", currentGame.camera.Position)
+	}
+
+	// Count of rendered chunks (for debugging)
+	renderedChunks := 0
+
+	// Render only visible chunks
 	for _, chunk := range w.chunks {
+		// Skip empty chunks
+		if chunk.IsEmpty() {
+			continue
+		}
+
+		// Check if chunk is visible in frustum
+		if !w.frustum.IsChunkVisible(chunk) {
+			continue
+		}
+
+		// Render the chunk
 		chunk.Render(w)
+		renderedChunks++
+	}
+
+	// Enable debugging output to monitor chunk rendering
+	// This helps identify when frustum culling is too aggressive
+	if renderedChunks == 0 {
+		fmt.Printf("WARNING: No chunks rendered! Player at chunk (%d, %d)\n", w.playerChunkPos.X, w.playerChunkPos.Z)
+	} else if renderedChunks < 5 {
+		// Only a few chunks being rendered might indicate a problem
+		fmt.Printf("Low chunk count: %d/%d chunks rendered\n", renderedChunks, len(w.chunks))
+	}
+
+	// For periodic debugging
+	if currentGame != nil && currentGame.frameCount%120 == 0 {
+		fmt.Printf("Rendered %d/%d chunks\n", renderedChunks, len(w.chunks))
 	}
 }
 

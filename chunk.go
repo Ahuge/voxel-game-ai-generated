@@ -1,15 +1,13 @@
 package main
 
 import (
-	// "github.com/go-gl/gl/v4.1-core/gl"
-
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Chunk constants
 const (
-	ChunkSize   = 64
+	ChunkSize   = 16
 	WorldHeight = 128 // Increased from 10 to allow for more vertical terrain
 )
 
@@ -25,6 +23,14 @@ type Chunk struct {
 	worldPos      ChunkPos
 	needsUpdate   bool
 	blockRegistry *BlockRegistry
+}
+
+// Delete cleans up chunk resources
+func (c *Chunk) Delete() {
+	if c.mesh != nil {
+		c.mesh.Delete()
+		c.mesh = nil
+	}
 }
 
 // NewChunk creates a new chunk at the given position
@@ -70,7 +76,7 @@ func (c *Chunk) IsEmpty() bool {
 }
 
 // BuildMesh builds the chunk's mesh for rendering
-func (c *Chunk) BuildMesh(w *World) {
+func (c *Chunk) BuildMesh(world *World) {
 	// Create a new mesh if needed
 	if c.mesh == nil {
 		c.mesh = NewMesh()
@@ -78,6 +84,13 @@ func (c *Chunk) BuildMesh(w *World) {
 		c.mesh.Clear()
 	}
 
+	// Skip if chunk is empty
+	if c.IsEmpty() {
+		c.needsUpdate = false
+		return
+	}
+
+	// Optimization: Only build faces that are visible
 	// For each block in the chunk
 	for x := 0; x < ChunkSize; x++ {
 		for y := 0; y < WorldHeight; y++ {
@@ -89,6 +102,11 @@ func (c *Chunk) BuildMesh(w *World) {
 					continue
 				}
 
+				// Skip blocks that are completely surrounded by solid blocks of the same type
+				if !c.hasExposedFaces(x, y, z, blockType) {
+					continue
+				}
+
 				// Get block info
 				blockInfo := c.blockRegistry.GetBlockInfo(blockType)
 
@@ -96,12 +114,6 @@ func (c *Chunk) BuildMesh(w *World) {
 				worldX := float32(c.worldPos.X*ChunkSize + x)
 				worldY := float32(y)
 				worldZ := float32(c.worldPos.Z*ChunkSize + z)
-
-				texId, ok := w.textures[blockInfo.Name]
-				if ok {
-					gl.ActiveTexture(gl.TEXTURE0)
-					gl.BindTexture(gl.TEXTURE_2D, texId)
-				}
 
 				// Add faces for this block
 				c.addBlockFaces(worldX, worldY, worldZ, x, y, z, blockType, blockInfo.Color)
@@ -119,6 +131,8 @@ func (c *Chunk) BuildMesh(w *World) {
 // addBlockFaces adds visible faces of a block to the mesh
 func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, blockType BlockType, color mgl32.Vec3) {
 	// Check each of the 6 faces
+	// Get block info for texture indices
+	//blockInfo := c.blockRegistry.GetBlockInfo(blockType)
 
 	// Top face (+Y)
 	if c.shouldRenderFace(x, y+1, z, blockType) {
@@ -196,23 +210,58 @@ func (c *Chunk) shouldRenderFace(x, y, z int, blockType BlockType) bool {
 	return c.blockRegistry.IsTransparent(adjBlockType) && adjBlockType != blockType
 }
 
+// hasExposedFaces checks if a block has any faces that need to be rendered
+func (c *Chunk) hasExposedFaces(x, y, z int, blockType BlockType) bool {
+	// Check all six faces
+	return c.shouldRenderFace(x+1, y, z, blockType) || // Right
+		c.shouldRenderFace(x-1, y, z, blockType) || // Left
+		c.shouldRenderFace(x, y+1, z, blockType) || // Top
+		c.shouldRenderFace(x, y-1, z, blockType) || // Bottom
+		c.shouldRenderFace(x, y, z+1, blockType) || // Front
+		c.shouldRenderFace(x, y, z-1, blockType) // Back
+}
+
 // Render renders the chunk
-func (c *Chunk) Render(w *World) {
+func (c *Chunk) Render(world *World) {
 	// Build mesh if needed
 	if c.needsUpdate {
-		c.BuildMesh(w)
+		c.BuildMesh(world)
+	}
+
+	// Instead of using just the first block, find the most common non-air block type in the chunk
+	blockCounts := make(map[BlockType]int)
+	for x := 0; x < ChunkSize; x++ {
+		for y := 0; y < WorldHeight; y++ {
+			for z := 0; z < ChunkSize; z++ {
+				blockType := c.blocks[x][y][z]
+				if blockType != Air {
+					blockCounts[blockType]++
+				}
+			}
+		}
+	}
+
+	// Find the most common block type
+	var mostCommonType BlockType = Dirt // Default to Dirt if no blocks found
+	maxCount := 0
+	for blockType, count := range blockCounts {
+		if count > maxCount {
+			maxCount = count
+			mostCommonType = blockType
+		}
+	}
+
+	// Get block info to determine texture
+	blockInfo := c.blockRegistry.GetBlockInfo(mostCommonType)
+
+	// Try to use texture for this block type if available
+	if texture, exists := world.textures[blockInfo.Name]; exists {
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, texture)
 	}
 
 	// Draw mesh
 	if c.mesh != nil {
 		c.mesh.Draw()
-	}
-}
-
-// Delete frees all resources used by the chunk
-func (c *Chunk) Delete() {
-	if c.mesh != nil {
-		c.mesh.Delete()
-		c.mesh = nil
 	}
 }
