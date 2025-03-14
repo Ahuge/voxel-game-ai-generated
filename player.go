@@ -26,7 +26,7 @@ func NewPlayer(camera *Camera) *Player {
 		camera:   camera,
 		speed:    5.0,
 		jump:     5.0,
-		gravity:  10.0,
+		gravity:  0.0,
 		onGround: false,
 		velocity: mgl32.Vec3{0, 0, 0},
 		position: camera.Position,
@@ -43,9 +43,14 @@ func (p *Player) Update(deltaTime float64, window *glfw.Window) {
 
 	// Apply gravity
 	if !p.onGround {
-		fmt.Printf("Falling at %f\n", p.gravity * dt)
 		p.velocity[1] -= p.gravity * dt
 	}
+
+	//// Shift for going down, E for going up
+	//if p.keys[glfw.KeyLeftShift] {
+	//	//p.velocity.Mul(p.speed)
+	//	p.speed = 25
+	//}
 
 	// Handle movement - WASD for horizontal movement
 	if p.keys[glfw.KeyW] {
@@ -74,27 +79,18 @@ func (p *Player) Update(deltaTime float64, window *glfw.Window) {
 			p.onGround = false
 		}
 	}
-	fmt.Printf("Velocity: %f\n", p.velocity[1])
 
-	// Shift for going down, E for going up
-	// if p.keys[glfw.KeyLeftShift] {
-	// 	p.position[1] -= p.speed * dt
-	// }
 	if p.keys[glfw.KeyE] {
 		p.position[1] += p.speed * dt
 	}
 
 	// Update position based on velocity
-	fmt.Printf("Position: %v\n", p.position)
-	fmt.Printf("	Add: %v\n", p.velocity.Mul(dt))
 	p.position = p.position.Add(p.velocity.Mul(dt))
-	fmt.Printf("	Result: %v\n", p.position)
 
 	// Check for collisions and adjust position
 	p.handleCollisions()
 
 	// Update camera position
-	fmt.Printf("After Collisions Position: %v\n", p.position)
 	p.camera.Position = p.position
 }
 
@@ -219,6 +215,26 @@ func (p *Player) handleCollisions() {
 			}
 		}
 	}
+	block := world.GetBlock(int(math.Round(float64(p.position[0]))), int(math.Round(float64(p.position[1]))), int(math.Round(float64(p.position[2]))))
+	blockAbove := world.GetBlock(int(math.Round(float64(p.position[0]))), int(math.Round(float64(p.position[1]))+1), int(math.Round(float64(p.position[2]))))
+	if block == Dirt && world.blockRegistry.IsSolid(block) {
+		fmt.Printf("We are inside dirt\n")
+	}
+	if (block != Air && world.blockRegistry.IsSolid(block)) || (blockAbove != Air && world.blockRegistry.IsSolid(blockAbove)) {
+		if block != Air {
+			fmt.Sprintf("Hack fix position block\n")
+			p.position[1] = p.position[1] + 1.5 // Position player on top of block
+		}
+		if blockAbove != Air {
+			fmt.Sprintf("Hack fix position blockAbove\n")
+			p.position[1] = p.position[1] + 1.5 // Position player on top of block
+		}
+		p.velocity[1] = 0
+		p.onGround = true
+	}
+	if (block != Air && world.blockRegistry.IsSolid(block)) || (blockAbove != Air && world.blockRegistry.IsSolid(blockAbove)) {
+		fmt.Printf("BadDay\n")
+	}
 
 	// Simple ground collision as a fallback
 	if p.position[1] < 0.5 {
@@ -243,7 +259,13 @@ func (p *Player) KeyCallback(window *glfw.Window, key glfw.Key, scancode int, ac
 	// Track key states
 	if action == glfw.Press {
 		p.keys[key] = true
+		if key == glfw.KeyLeftShift {
+			p.speed = p.speed * p.speed
+		}
 	} else if action == glfw.Release {
 		p.keys[key] = false
+		if key == glfw.KeyLeftShift {
+			p.speed = p.speed / p.speed
+		}
 	}
 }

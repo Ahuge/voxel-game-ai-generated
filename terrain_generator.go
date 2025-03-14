@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"math/rand/v2"
 
 	"github.com/ojrac/opensimplex-go"
 )
@@ -21,75 +23,76 @@ const (
 
 // BiomeInfo contains information about a biome
 type BiomeInfo struct {
-	Name           string
-	BaseHeight     float64
+	Name            string
+	BaseHeight      float64
 	HeightVariation float64
-	TopBlock       byte
-	FillerBlock    byte
-	UnderwaterBlock byte
+	TopBlock        BlockType
+	FillerBlock     BlockType
+	UnderwaterBlock BlockType
 }
 
 // TerrainGenerator handles terrain generation
 type TerrainGenerator struct {
-	noise        opensimplex.Noise
-	biomeNoise   opensimplex.Noise
-	biomes       [NumBiomeTypes]BiomeInfo
-	seed         int64
-	seaLevel     int
+	noise      opensimplex.Noise
+	biomeNoise opensimplex.Noise
+	biomes     [NumBiomeTypes]BiomeInfo
+	seed       int64
+	seaLevel   int
 }
 
 // NewTerrainGenerator creates a new terrain generator with the given seed
 func NewTerrainGenerator(seed int64) *TerrainGenerator {
+	fmt.Printf("New TerrainGenerator with seed %d\n", seed)
 	gen := &TerrainGenerator{
 		noise:      opensimplex.New(seed),
 		biomeNoise: opensimplex.New(seed + 1), // Use a different seed for biome noise
 		seed:       seed,
-		seaLevel:   64, // Set sea level at half of world height
+		seaLevel:   rand.IntN(WorldHeight/6) * 2, // Set sea level at half of world height
 	}
 
 	// Initialize biome types
 	gen.biomes[BiomePlains] = BiomeInfo{
-		Name:           "Plains",
-		BaseHeight:     0.1,
+		Name:            "Plains",
+		BaseHeight:      0.1,
 		HeightVariation: 0.05,
-		TopBlock:       Grass,
-		FillerBlock:    Dirt,
+		TopBlock:        Grass,
+		FillerBlock:     Dirt,
 		UnderwaterBlock: Sand,
 	}
 
 	gen.biomes[BiomeMountains] = BiomeInfo{
-		Name:           "Mountains",
-		BaseHeight:     0.5,
+		Name:            "Mountains",
+		BaseHeight:      0.5,
 		HeightVariation: 0.5,
-		TopBlock:       Stone,
-		FillerBlock:    Stone,
+		TopBlock:        Stone,
+		FillerBlock:     Stone,
 		UnderwaterBlock: Gravel,
 	}
 
 	gen.biomes[BiomeDesert] = BiomeInfo{
-		Name:           "Desert",
-		BaseHeight:     0.1,
+		Name:            "Desert",
+		BaseHeight:      0.1,
 		HeightVariation: 0.05,
-		TopBlock:       Sand,
-		FillerBlock:    Sand,
+		TopBlock:        Sand,
+		FillerBlock:     Sand,
 		UnderwaterBlock: Sand,
 	}
 
 	gen.biomes[BiomeForest] = BiomeInfo{
-		Name:           "Forest",
-		BaseHeight:     0.2,
+		Name:            "Forest",
+		BaseHeight:      0.2,
 		HeightVariation: 0.1,
-		TopBlock:       Grass,
-		FillerBlock:    Dirt,
+		TopBlock:        Grass,
+		FillerBlock:     Dirt,
 		UnderwaterBlock: Dirt,
 	}
 
 	gen.biomes[BiomeOcean] = BiomeInfo{
-		Name:           "Ocean",
-		BaseHeight:     -0.5,
+		Name:            "Ocean",
+		BaseHeight:      -0.5,
 		HeightVariation: 0.05,
-		TopBlock:       Sand,
-		FillerBlock:    Sand,
+		TopBlock:        Sand,
+		FillerBlock:     Sand,
 		UnderwaterBlock: Sand,
 	}
 
@@ -158,10 +161,10 @@ func (g *TerrainGenerator) getBiomeAt(x, z float64) BiomeInfo {
 // generateTerrainHeight calculates the terrain height at the given coordinates
 func (g *TerrainGenerator) generateTerrainHeight(x, z float64, biome BiomeInfo) int {
 	// Scale coordinates for different noise layers
-	x1, z1 := x*0.001, z*0.001  // Continent shape - very large scale
-	x2, z2 := x*0.01, z*0.01    // Base terrain - large scale features
-	x3, z3 := x*0.05, z*0.05    // Hills - medium scale features
-	x4, z4 := x*0.2, z*0.2      // Details - small scale features
+	x1, z1 := x*0.001, z*0.001 // Continent shape - very large scale
+	x2, z2 := x*0.01, z*0.01   // Base terrain - large scale features
+	x3, z3 := x*0.05, z*0.05   // Hills - medium scale features
+	x4, z4 := x*0.2, z*0.2     // Details - small scale features
 
 	// Continent shape (very large scale features)
 	continentShape := (g.noise.Eval2(x1, z1) + 1.0) * 0.5
@@ -198,7 +201,7 @@ func (g *TerrainGenerator) generateTerrainHeight(x, z float64, biome BiomeInfo) 
 	value = (value + 1.0) * 0.5
 
 	// Apply biome-specific height adjustments
-	value = value * biome.HeightVariation + biome.BaseHeight
+	value = value*biome.HeightVariation + biome.BaseHeight
 
 	// Apply ocean depth
 	value -= oceanDepth
@@ -241,12 +244,12 @@ func (g *TerrainGenerator) generateTerrainColumn(chunk *Chunk, x, z, height int,
 					// Above water surface
 					chunk.blocks[x][y][z] = biome.TopBlock
 				}
-			} else if y > height - 4 {
+			} else if y > height-4 {
 				// Filler layer (3 blocks deep)
 				chunk.blocks[x][y][z] = biome.FillerBlock
-			} else if y > height - 8 {
+			} else if y > height-8 {
 				// Transition layer (mix of filler and stone)
-				if (x+y+z) % 2 == 0 {
+				if (x+y+z)%2 == 0 {
 					chunk.blocks[x][y][z] = biome.FillerBlock
 				} else {
 					chunk.blocks[x][y][z] = Stone
@@ -317,16 +320,16 @@ func (g *TerrainGenerator) generateTree(chunk *Chunk, x, y, z int) {
 				if lx == 0 && lz == 0 {
 					continue
 				}
-				
+
 				// Calculate leaf position
 				leafX := x + lx
 				leafY := y + 1 + ly // Start leaves at y+1
 				leafZ := z + lz
-				
+
 				// Check bounds
-				if leafX >= 0 && leafX < ChunkSize && 
-				   leafY >= 0 && leafY < WorldHeight && 
-				   leafZ >= 0 && leafZ < ChunkSize {
+				if leafX >= 0 && leafX < ChunkSize &&
+					leafY >= 0 && leafY < WorldHeight &&
+					leafZ >= 0 && leafZ < ChunkSize {
 					// Only place leaves where there's air
 					if chunk.blocks[leafX][leafY][leafZ] == Air {
 						chunk.blocks[leafX][leafY][leafZ] = Leaves

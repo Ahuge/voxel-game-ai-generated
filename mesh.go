@@ -7,9 +7,9 @@ import (
 
 // Mesh represents a 3D mesh with vertices, indices, and OpenGL buffers
 type Mesh struct {
-	vertices []float32
-	indices  []uint32
-	colors   []float32
+	vertices  []float32
+	indices   []uint32
+	colors    []float32
 	texCoords []float32
 	normals   []float32
 
@@ -51,8 +51,8 @@ func (m *Mesh) AddIndex(index uint32) {
 }
 
 // AddColor adds a color to the mesh
-func (m *Mesh) AddColor(r, g, b float32) {
-	m.colors = append(m.colors, r, g, b)
+func (m *Mesh) AddColor(r, g, b, a float32) {
+	m.colors = append(m.colors, r, g, b, a)
 }
 
 // AddTexCoord adds a texture coordinate to the mesh
@@ -66,7 +66,7 @@ func (m *Mesh) AddNormal(nx, ny, nz float32) {
 }
 
 // AddQuad adds a quad (two triangles) to the mesh
-func (m *Mesh) AddQuad(v1, v2, v3, v4 mgl32.Vec3, color mgl32.Vec3, normal mgl32.Vec3) {
+func (m *Mesh) AddQuad(v1, v2, v3, v4 mgl32.Vec3, color mgl32.Vec3, normal mgl32.Vec3, alpha float32) {
 	// Get current vertex count
 	baseIndex := uint32(len(m.vertices) / 3)
 
@@ -78,7 +78,7 @@ func (m *Mesh) AddQuad(v1, v2, v3, v4 mgl32.Vec3, color mgl32.Vec3, normal mgl32
 
 	// Add colors
 	for i := 0; i < 4; i++ {
-		m.AddColor(color.X(), color.Y(), color.Z())
+		m.AddColor(color.X(), color.Y(), color.Z(), alpha)
 	}
 
 	// Add normals
@@ -130,7 +130,7 @@ func (m *Mesh) Upload() {
 	gl.BindBuffer(gl.ARRAY_BUFFER, m.cbo)
 	gl.BufferData(gl.ARRAY_BUFFER, len(m.colors)*4, gl.Ptr(m.colors), gl.STATIC_DRAW)
 	gl.EnableVertexAttribArray(1)
-	gl.VertexAttribPointer(1, 3, gl.FLOAT, false, 0, nil)
+	gl.VertexAttribPointer(1, 4, gl.FLOAT, false, 0, nil)
 
 	// Upload texture coordinates
 	gl.BindBuffer(gl.ARRAY_BUFFER, m.tbo)

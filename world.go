@@ -7,7 +7,7 @@ import (
 
 // Render distance constants
 const (
-	RenderDist = 8 // Increased from 1 to allow for better visibility
+	RenderDist = 16 // Increased from 1 to allow for better visibility
 )
 
 // World represents the voxel world
@@ -20,11 +20,11 @@ type World struct {
 }
 
 // NewWorld creates a new world instance
-func NewWorld() *World {
+func NewWorld(seed int64) *World {
 	world := &World{
 		chunks:        make(map[ChunkPos]*Chunk),
 		blockRegistry: NewBlockRegistry(),
-		terrainGen:    NewTerrainGenerator(42), // Seed for terrain generation
+		terrainGen:    NewTerrainGenerator(seed), // Seed for terrain generation
 	}
 
 	// Load block textures
@@ -137,7 +137,7 @@ func (w *World) Render(shader *Shader) {
 }
 
 // GetBlock returns the block type at the given world coordinates
-func (w *World) GetBlock(x, y, z int) byte {
+func (w *World) GetBlock(x, y, z int) BlockType {
 	// Calculate chunk position
 	chunkX := x / ChunkSize
 	chunkZ := z / ChunkSize
@@ -171,7 +171,7 @@ func (w *World) GetBlock(x, y, z int) byte {
 }
 
 // SetBlock sets the block type at the given world coordinates
-func (w *World) SetBlock(x, y, z int, blockType byte) {
+func (w *World) SetBlock(x, y, z int, blockType BlockType) {
 	// Calculate chunk position
 	chunkX := x / ChunkSize
 	chunkZ := z / ChunkSize

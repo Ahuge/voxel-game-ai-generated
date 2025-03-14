@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"runtime"
-
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
+	"log"
+	"math/rand/v2"
+	"runtime"
 )
 
 const (
@@ -53,13 +53,18 @@ func main() {
 
 	// Configure global OpenGL state
 	gl.Enable(gl.DEPTH_TEST)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	// Temporarily disable face culling to see if blocks become visible
 	// gl.Enable(gl.CULL_FACE)
 	// gl.CullFace(gl.BACK)
 	// gl.FrontFace(gl.CCW)
 
 	// Create game instance
-	game := NewGame(window)
+
+	seed := int64(rand.Int32())
+	game := NewGame(window, seed)
+	game.paused = true
 
 	// Set global game instance for collision detection
 	currentGame = game
@@ -83,6 +88,7 @@ func main() {
 
 		window.SwapBuffers()
 		glfw.PollEvents()
+		// fmt.Printf("%f FPS\n", 1/game.deltaTime)
 	}
 }
 
@@ -101,10 +107,12 @@ type Game struct {
 	paused      bool
 	menuOption  int
 	menuOptions []string
+	// UI system
+	ui *UI
 }
 
 // NewGame creates a new game instance
-func NewGame(window *glfw.Window) *Game {
+func NewGame(window *glfw.Window, seed int64) *Game {
 	game := &Game{
 		window:      window,
 		firstMouse:  true,
@@ -114,13 +122,13 @@ func NewGame(window *glfw.Window) *Game {
 	}
 
 	// Initialize camera
-	game.camera = NewCamera(mgl32.Vec3{0, 35, 10}, mgl32.Vec3{0, 1, 0}, -90, -30)
+	game.camera = NewCamera(mgl32.Vec3{0, 55, 10}, mgl32.Vec3{0, 1, 0}, -90, -30)
 
 	// Initialize shader
 	game.shader = NewShader("shaders/vertex.glsl", "shaders/fragment.glsl")
 
 	// Initialize world
-	game.world = NewWorld()
+	game.world = NewWorld(seed)
 
 	// Initialize player
 	game.player = NewPlayer(game.camera)
@@ -129,6 +137,9 @@ func NewGame(window *glfw.Window) *Game {
 	w, h := window.GetSize()
 	game.lastX = float64(w) / 2
 	game.lastY = float64(h) / 2
+
+	// Initialize UI system
+	game.ui = NewUI()
 
 	return game
 }
@@ -172,17 +183,11 @@ func (g *Game) Render() {
 
 // renderPauseMenu renders the pause menu
 func (g *Game) renderPauseMenu() {
-	// This is a simple implementation that prints the menu to the console
-	// In a real implementation, you would render this to the screen using OpenGL
-	fmt.Println("\n===== PAUSE MENU =====")
-	for i, option := range g.menuOptions {
-		if i == g.menuOption {
-			fmt.Printf("> %s <\n", option)
-		} else {
-			fmt.Printf("  %s  \n", option)
-		}
-	}
-	fmt.Println("=====================")
+	// Get current window size
+	width, height := g.window.GetSize()
+
+	// Render the pause menu using the UI system
+	g.ui.RenderPauseMenu(g.menuOptions, g.menuOption, width, height)
 }
 
 // KeyCallback handles key input
@@ -278,11 +283,12 @@ func (g *Game) selectMenuOption() {
 		}
 
 		// Generate a new seed based on current time
-		newSeed := int64(glfw.GetTime() * 1000)
+		//newSeed := int64(glfw.GetTime() * 1000)
+		newSeed := int64(rand.Int32())
 
 		// Create a new world with the new seed
-		g.world = NewWorld()
-		g.world.terrainGen = NewTerrainGenerator(newSeed)
+		g.world = NewWorld(newSeed)
+		//g.world.terrainGen = NewTerrainGenerator(newSeed)
 
 		// Reset player position
 		g.camera.Position = mgl32.Vec3{0, 35, 10}

@@ -7,7 +7,7 @@ import (
 
 // Chunk constants
 const (
-	ChunkSize   = 16
+	ChunkSize   = 64
 	WorldHeight = 128 // Increased from 10 to allow for more vertical terrain
 )
 
@@ -18,7 +18,7 @@ type ChunkPos struct {
 
 // Chunk represents a section of the world
 type Chunk struct {
-	blocks        [ChunkSize][WorldHeight][ChunkSize]byte
+	blocks        [ChunkSize][WorldHeight][ChunkSize]BlockType
 	mesh          *Mesh
 	worldPos      ChunkPos
 	needsUpdate   bool
@@ -35,7 +35,7 @@ func NewChunk(pos ChunkPos, registry *BlockRegistry) *Chunk {
 }
 
 // GetBlock returns the block type at the given local coordinates
-func (c *Chunk) GetBlock(x, y, z int) byte {
+func (c *Chunk) GetBlock(x, y, z int) BlockType {
 	// Check bounds
 	if x < 0 || x >= ChunkSize || y < 0 || y >= WorldHeight || z < 0 || z >= ChunkSize {
 		return Air
@@ -44,7 +44,7 @@ func (c *Chunk) GetBlock(x, y, z int) byte {
 }
 
 // SetBlock sets the block type at the given local coordinates
-func (c *Chunk) SetBlock(x, y, z int, blockType byte) {
+func (c *Chunk) SetBlock(x, y, z int, blockType BlockType) {
 	// Check bounds
 	if x < 0 || x >= ChunkSize || y < 0 || y >= WorldHeight || z < 0 || z >= ChunkSize {
 		return
@@ -109,7 +109,7 @@ func (c *Chunk) BuildMesh() {
 }
 
 // addBlockFaces adds visible faces of a block to the mesh
-func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, blockType byte, color mgl32.Vec3) {
+func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, blockType BlockType, color mgl32.Vec3) {
 	// Check each of the 6 faces
 
 	// Top face (+Y)
@@ -119,7 +119,7 @@ func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, block
 		v3 := mgl32.Vec3{worldX + 1, worldY + 1, worldZ + 1}
 		v4 := mgl32.Vec3{worldX, worldY + 1, worldZ + 1}
 		normal := mgl32.Vec3{0, 1, 0}
-		c.mesh.AddQuad(v1, v2, v3, v4, color, normal)
+		c.mesh.AddQuad(v1, v2, v3, v4, color, normal, 1.0)
 	}
 
 	// Bottom face (-Y)
@@ -129,7 +129,7 @@ func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, block
 		v3 := mgl32.Vec3{worldX + 1, worldY, worldZ}
 		v4 := mgl32.Vec3{worldX, worldY, worldZ}
 		normal := mgl32.Vec3{0, -1, 0}
-		c.mesh.AddQuad(v1, v2, v3, v4, color, normal)
+		c.mesh.AddQuad(v1, v2, v3, v4, color, normal, 1.0)
 	}
 
 	// Front face (+Z)
@@ -139,7 +139,7 @@ func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, block
 		v3 := mgl32.Vec3{worldX + 1, worldY + 1, worldZ + 1}
 		v4 := mgl32.Vec3{worldX + 1, worldY, worldZ + 1}
 		normal := mgl32.Vec3{0, 0, 1}
-		c.mesh.AddQuad(v1, v2, v3, v4, color, normal)
+		c.mesh.AddQuad(v1, v2, v3, v4, color, normal, 1.0)
 	}
 
 	// Back face (-Z)
@@ -149,7 +149,7 @@ func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, block
 		v3 := mgl32.Vec3{worldX, worldY + 1, worldZ}
 		v4 := mgl32.Vec3{worldX, worldY, worldZ}
 		normal := mgl32.Vec3{0, 0, -1}
-		c.mesh.AddQuad(v1, v2, v3, v4, color, normal)
+		c.mesh.AddQuad(v1, v2, v3, v4, color, normal, 1.0)
 	}
 
 	// Right face (+X)
@@ -159,7 +159,7 @@ func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, block
 		v3 := mgl32.Vec3{worldX + 1, worldY + 1, worldZ}
 		v4 := mgl32.Vec3{worldX + 1, worldY, worldZ}
 		normal := mgl32.Vec3{1, 0, 0}
-		c.mesh.AddQuad(v1, v2, v3, v4, color, normal)
+		c.mesh.AddQuad(v1, v2, v3, v4, color, normal, 1.0)
 	}
 
 	// Left face (-X)
@@ -169,12 +169,12 @@ func (c *Chunk) addBlockFaces(worldX, worldY, worldZ float32, x, y, z int, block
 		v3 := mgl32.Vec3{worldX, worldY + 1, worldZ + 1}
 		v4 := mgl32.Vec3{worldX, worldY, worldZ + 1}
 		normal := mgl32.Vec3{-1, 0, 0}
-		c.mesh.AddQuad(v1, v2, v3, v4, color, normal)
+		c.mesh.AddQuad(v1, v2, v3, v4, color, normal, 1.0)
 	}
 }
 
 // shouldRenderFace determines if a face should be rendered
-func (c *Chunk) shouldRenderFace(x, y, z int, blockType byte) bool {
+func (c *Chunk) shouldRenderFace(x, y, z int, blockType BlockType) bool {
 	// Get the adjacent block
 	adjBlockType := c.GetBlock(x, y, z)
 

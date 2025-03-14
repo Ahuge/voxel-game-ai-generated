@@ -5,8 +5,10 @@ import (
 )
 
 // Block type constants
+type BlockType int
+
 const (
-	Air = iota
+	Air BlockType = iota
 	Dirt
 	Grass
 	Stone
@@ -20,6 +22,36 @@ const (
 	Bedrock
 	NumBlockTypes
 )
+
+func BlockTypeToString(block BlockType) string {
+	switch block {
+	case Air:
+		return "Air"
+	case Dirt:
+		return "Dirt"
+	case Grass:
+		return "Grass"
+	case Stone:
+		return "Stone"
+	case Wood:
+		return "Wood"
+	case Leaves:
+		return "Leaves"
+	case Water:
+		return "Water"
+	case Sand:
+		return "Sand"
+	case Snow:
+		return "Snow"
+	case Gravel:
+		return "Gravel"
+	case Clay:
+		return "Clay"
+	case Bedrock:
+		return "Bedrock"
+	}
+	return "Unknown"
+}
 
 // BlockFace represents a face of a block
 type BlockFace int
@@ -79,7 +111,7 @@ func NewBlockRegistry() *BlockRegistry {
 		Name:        "Stone",
 		Solid:       true,
 		Transparent: false,
-		Color:       mgl32.Vec3{0.5, 0.5, 0.5},
+		Color:       mgl32.Vec3{0.45, 0.45, 0.45},
 	}
 
 	registry.Blocks[Wood] = BlockInfo{
@@ -121,7 +153,7 @@ func NewBlockRegistry() *BlockRegistry {
 		Name:        "Gravel",
 		Solid:       true,
 		Transparent: false,
-		Color:       mgl32.Vec3{0.5, 0.5, 0.5},
+		Color:       mgl32.Vec3{0.55, 0.55, 0.55},
 	}
 
 	registry.Blocks[Clay] = BlockInfo{
@@ -142,7 +174,7 @@ func NewBlockRegistry() *BlockRegistry {
 }
 
 // GetBlockInfo returns information about a block type
-func (r *BlockRegistry) GetBlockInfo(blockType byte) BlockInfo {
+func (r *BlockRegistry) GetBlockInfo(blockType BlockType) BlockInfo {
 	if blockType >= NumBlockTypes {
 		return r.Blocks[Air]
 	}
@@ -150,11 +182,11 @@ func (r *BlockRegistry) GetBlockInfo(blockType byte) BlockInfo {
 }
 
 // IsSolid returns whether a block type is solid
-func (r *BlockRegistry) IsSolid(blockType byte) bool {
+func (r *BlockRegistry) IsSolid(blockType BlockType) bool {
 	return r.GetBlockInfo(blockType).Solid
 }
 
 // IsTransparent returns whether a block type is transparent
-func (r *BlockRegistry) IsTransparent(blockType byte) bool {
+func (r *BlockRegistry) IsTransparent(blockType BlockType) bool {
 	return r.GetBlockInfo(blockType).Transparent
 }
