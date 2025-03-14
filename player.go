@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -46,30 +45,34 @@ func (p *Player) Update(deltaTime float64, window *glfw.Window) {
 		p.velocity[1] -= p.gravity * dt
 	}
 
-	//// Shift for going down, E for going up
-	//if p.keys[glfw.KeyLeftShift] {
-	//	//p.velocity.Mul(p.speed)
-	//	p.speed = 25
-	//}
-
 	// Handle movement - WASD for horizontal movement
+	// Apply movements separately and check collisions after each step
+	// to prevent clipping through blocks when moving diagonally or quickly
 	if p.keys[glfw.KeyW] {
 		// Move forward in the direction the camera is facing, but only on the XZ plane
 		forward := mgl32.Vec3{p.camera.Front.X(), 0, p.camera.Front.Z()}.Normalize()
 		p.position = p.position.Add(forward.Mul(p.speed * dt))
+		// Check collisions after forward movement
+		// p.handleCollisions()
 	}
 	if p.keys[glfw.KeyS] {
 		// Move backward in the direction the camera is facing, but only on the XZ plane
 		forward := mgl32.Vec3{p.camera.Front.X(), 0, p.camera.Front.Z()}.Normalize()
 		p.position = p.position.Sub(forward.Mul(p.speed * dt))
+		// Check collisions after backward movement
+		// p.handleCollisions()
 	}
 	if p.keys[glfw.KeyA] {
 		// Move left relative to the camera direction
 		p.position = p.position.Sub(p.camera.Right.Mul(p.speed * dt))
+		// Check collisions after left movement
+		// p.handleCollisions()
 	}
 	if p.keys[glfw.KeyD] {
 		// Move right relative to the camera direction
 		p.position = p.position.Add(p.camera.Right.Mul(p.speed * dt))
+		// Check collisions after right movement
+		// p.handleCollisions()
 	}
 
 	// Space for jumping
@@ -82,12 +85,14 @@ func (p *Player) Update(deltaTime float64, window *glfw.Window) {
 
 	if p.keys[glfw.KeyE] {
 		p.position[1] += p.speed * dt
+		// Check collisions after vertical movement
+		// p.handleCollisions()
 	}
 
 	// Update position based on velocity
 	p.position = p.position.Add(p.velocity.Mul(dt))
 
-	// Check for collisions and adjust position
+	// Final collision check after velocity-based movement
 	p.handleCollisions()
 
 	// Update camera position
@@ -102,14 +107,18 @@ func (p *Player) Update(deltaTime float64, window *glfw.Window) {
 // handleCollisions checks for collisions with blocks and adjusts player position
 func (p *Player) handleCollisions() {
 	// Player dimensions (hitbox)
-	playerWidth := float32(0.3)  // Half-width of player
-	playerHeight := float32(1.8) // Height of player
+	// Slightly increased hitbox size for collision detection to prevent clipping
+	playerWidth := float32(0.4)   // Increased from 0.3 to 0.35 for safer collision detection
+	playerHeight := float32(1.95) // Increased from 1.8 to 1.85 for safer collision detection
 
 	// Get the world from the game instance
 	world := p.getWorld()
 	if world == nil {
 		return
 	}
+
+	// Store original position to detect if we're moving too fast
+	originalPos := p.position
 
 	// Check feet position
 	feetY := p.position[1] - 0.5 // Offset from center to feet
@@ -132,8 +141,8 @@ func (p *Player) handleCollisions() {
 	}
 
 	// Check for collisions in all directions
-	// Check blocks at player's position and head height
-	for y := 0; y < 2; y++ { // Check at feet and head level
+	// Expanded check range to ensure we don't miss any blocks
+	for y := -1; y < 3; y++ { // Check below feet, at feet, at head level, and above head
 		checkY := blockY + y
 		if checkY < 0 || checkY >= WorldHeight {
 			continue
@@ -187,28 +196,31 @@ func (p *Player) handleCollisions() {
 						minPenetrationZ := float32(math.Min(float64(penetrationZ1), float64(penetrationZ2)))
 						minPenetrationY := float32(math.Min(float64(penetrationY1), float64(penetrationY2)))
 
+						// Add a small buffer to prevent exact edge cases
+						const buffer float32 = 0.01
+
 						// Resolve along axis with minimum penetration
 						if minPenetrationX < minPenetrationY && minPenetrationX < minPenetrationZ {
 							// Resolve along X axis
 							if penetrationX1 < penetrationX2 {
-								p.position[0] = minX - playerWidth
+								p.position[0] = minX - playerWidth - buffer
 							} else {
-								p.position[0] = maxX + playerWidth
+								p.position[0] = maxX + playerWidth + buffer
 							}
 						} else if minPenetrationZ < minPenetrationY {
 							// Resolve along Z axis
 							if penetrationZ1 < penetrationZ2 {
-								p.position[2] = minZ - playerWidth
+								p.position[2] = minZ - playerWidth - buffer
 							} else {
-								p.position[2] = maxZ + playerWidth
+								p.position[2] = maxZ + playerWidth + buffer
 							}
 						} else {
 							// Resolve along Y axis
 							if penetrationY1 < penetrationY2 {
-								p.position[1] = minY - playerHeight + 0.5
+								p.position[1] = minY - playerHeight + 0.5 - buffer
 								p.velocity[1] = 0
 							} else {
-								p.position[1] = maxY + 0.5
+								p.position[1] = maxY + 0.5 + buffer
 								if p.velocity[1] < 0 {
 									p.velocity[1] = 0
 									p.onGround = true
@@ -220,25 +232,51 @@ func (p *Player) handleCollisions() {
 			}
 		}
 	}
-	block := world.GetBlock(int(math.Round(float64(p.position[0]))), int(math.Round(float64(p.position[1]))), int(math.Round(float64(p.position[2]))))
-	blockAbove := world.GetBlock(int(math.Round(float64(p.position[0]))), int(math.Round(float64(p.position[1]))+1), int(math.Round(float64(p.position[2]))))
-	if block == Dirt && world.blockRegistry.IsSolid(block) {
-		fmt.Printf("We are inside dirt\n")
-	}
+
+	// Additional safety check - if we're inside a block, move up
+	// Check the exact position we're in
+	block := world.GetBlock(int(math.Floor(float64(p.position[0]))),
+		int(math.Floor(float64(p.position[1]))),
+		int(math.Floor(float64(p.position[2]))))
+
+	blockAbove := world.GetBlock(int(math.Floor(float64(p.position[0]))),
+		int(math.Floor(float64(p.position[1]))+1),
+		int(math.Floor(float64(p.position[2]))))
+
+	// If we're still inside a block after all collision resolution, emergency fix
 	if (block != Air && world.blockRegistry.IsSolid(block)) || (blockAbove != Air && world.blockRegistry.IsSolid(blockAbove)) {
-		if block != Air {
-			fmt.Sprintf("Hack fix position block\n")
-			p.position[1] = p.position[1] + 1.5 // Position player on top of block
-		}
-		if blockAbove != Air {
-			fmt.Sprintf("Hack fix position blockAbove\n")
-			p.position[1] = p.position[1] + 1.5 // Position player on top of block
-		}
+		// We're inside a block - emergency escape upward
+		p.position[1] = float32(math.Ceil(float64(p.position[1]))) + 0.5
 		p.velocity[1] = 0
 		p.onGround = true
 	}
-	if (block != Air && world.blockRegistry.IsSolid(block)) || (blockAbove != Air && world.blockRegistry.IsSolid(blockAbove)) {
-		fmt.Printf("BadDay\n")
+
+	// Check if we're moving too fast (teleporting through blocks)
+	distMoved := originalPos.Sub(p.position).Len()
+	if distMoved > 1.0 {
+		// We moved more than 1 block in a single frame - do additional collision checks
+		// This helps catch cases where we might have passed through a thin wall
+		steps := int(math.Ceil(float64(distMoved))) + 1
+		stepSize := distMoved / float32(steps)
+
+		// Interpolate between original and current position
+		for i := 1; i < steps; i++ {
+			t := float32(i) * stepSize
+			interpPos := originalPos.Add(p.position.Sub(originalPos).Mul(t / distMoved))
+
+			// Check if this interpolated position is inside a block
+			interpBlock := world.GetBlock(
+				int(math.Floor(float64(interpPos[0]))),
+				int(math.Floor(float64(interpPos[1]))),
+				int(math.Floor(float64(interpPos[2]))))
+
+			if interpBlock != Air && world.blockRegistry.IsSolid(interpBlock) {
+				// Found collision during interpolation - move player to safe position
+				p.position = interpPos
+				p.position[1] = float32(math.Ceil(float64(interpPos[1]))) + 0.5
+				break
+			}
+		}
 	}
 
 	// Simple ground collision as a fallback
