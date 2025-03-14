@@ -26,7 +26,7 @@ func NewPlayer(camera *Camera) *Player {
 		camera:   camera,
 		speed:    5.0,
 		jump:     5.0,
-		gravity:  0.0,
+		gravity:  10.0,
 		onGround: false,
 		velocity: mgl32.Vec3{0, 0, 0},
 		position: camera.Position,
@@ -265,7 +265,7 @@ func (p *Player) KeyCallback(window *glfw.Window, key glfw.Key, scancode int, ac
 	} else if action == glfw.Release {
 		p.keys[key] = false
 		if key == glfw.KeyLeftShift {
-			p.speed = p.speed / p.speed
+			p.speed = float32(math.Sqrt(float64(p.speed)))
 		}
 	}
 }
