@@ -1,8 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Render distance constants
@@ -16,6 +21,7 @@ type World struct {
 	blockRegistry  *BlockRegistry
 	terrainGen     *TerrainGenerator
 	blockTexture   uint32
+	textures       map[string]uint32
 	playerChunkPos ChunkPos
 }
 
@@ -25,6 +31,7 @@ func NewWorld(seed int64) *World {
 		chunks:        make(map[ChunkPos]*Chunk),
 		blockRegistry: NewBlockRegistry(),
 		terrainGen:    NewTerrainGenerator(seed), // Seed for terrain generation
+		textures:      make(map[string]uint32),
 	}
 
 	// Load block textures
@@ -35,6 +42,22 @@ func NewWorld(seed int64) *World {
 	world.generateInitialChunks()
 
 	return world
+}
+
+func (w *World) loadTexture(path string) []byte {
+	imgFile, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return nil
+	}
+	defer imgFile.Close()
+	imgFile.Seek(0, 0)
+	imgBytes, err := ioutil.ReadAll(imgFile)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return nil
+	}
+	return imgBytes
 }
 
 // loadTextures loads the block textures
@@ -75,6 +98,30 @@ func (w *World) loadTextures() {
 	gl.GenerateMipmap(gl.TEXTURE_2D)
 
 	w.blockTexture = texture
+
+	filepath.Walk("./textures", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() && strings.HasSuffix(strings.ToLower(path), ".png") {
+			fmt.Println("Found PNG:", path)
+			byteImage := w.loadTexture(path)
+			var textureImage uint32
+			gl.GenTextures(1, &textureImage)
+			gl.BindTexture(gl.TEXTURE_2D, textureImage)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+
+			gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(byteImage))
+			gl.GenerateMipmap(gl.TEXTURE_2D)
+			// Perform operations on the PNG file here, e.g., open and process it
+			w.textures[strings.Split(filepath.Base(path), ".")[0]] = textureImage
+		}
+		return nil
+	})
 }
 
 // generateInitialChunks generates chunks around the player
@@ -114,7 +161,7 @@ func (w *World) Update(deltaTime float64) {
 	// Update chunks that need updating
 	for _, chunk := range w.chunks {
 		if chunk.needsUpdate {
-			chunk.BuildMesh()
+			chunk.BuildMesh(w)
 		}
 	}
 }
@@ -132,7 +179,7 @@ func (w *World) Render(shader *Shader) {
 
 	// Render all chunks
 	for _, chunk := range w.chunks {
-		chunk.Render()
+		chunk.Render(w)
 	}
 }
 

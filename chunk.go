@@ -2,6 +2,8 @@ package main
 
 import (
 	// "github.com/go-gl/gl/v4.1-core/gl"
+
+	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -68,7 +70,7 @@ func (c *Chunk) IsEmpty() bool {
 }
 
 // BuildMesh builds the chunk's mesh for rendering
-func (c *Chunk) BuildMesh() {
+func (c *Chunk) BuildMesh(w *World) {
 	// Create a new mesh if needed
 	if c.mesh == nil {
 		c.mesh = NewMesh()
@@ -94,6 +96,12 @@ func (c *Chunk) BuildMesh() {
 				worldX := float32(c.worldPos.X*ChunkSize + x)
 				worldY := float32(y)
 				worldZ := float32(c.worldPos.Z*ChunkSize + z)
+
+				texId, ok := w.textures[blockInfo.Name]
+				if ok {
+					gl.ActiveTexture(gl.TEXTURE0)
+					gl.BindTexture(gl.TEXTURE_2D, texId)
+				}
 
 				// Add faces for this block
 				c.addBlockFaces(worldX, worldY, worldZ, x, y, z, blockType, blockInfo.Color)
@@ -189,10 +197,10 @@ func (c *Chunk) shouldRenderFace(x, y, z int, blockType BlockType) bool {
 }
 
 // Render renders the chunk
-func (c *Chunk) Render() {
+func (c *Chunk) Render(w *World) {
 	// Build mesh if needed
 	if c.needsUpdate {
-		c.BuildMesh()
+		c.BuildMesh(w)
 	}
 
 	// Draw mesh
