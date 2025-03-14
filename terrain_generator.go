@@ -260,7 +260,7 @@ func (g *TerrainGenerator) generateTerrainColumn(chunk *Chunk, x, z, height int,
 			}
 		} else if y <= g.seaLevel {
 			// Water blocks up to sea level
-			// chunk.blocks[x][y][z] = Water
+			chunk.blocks[x][y][z] = Water
 		} else {
 			// Air above terrain
 			chunk.blocks[x][y][z] = Air

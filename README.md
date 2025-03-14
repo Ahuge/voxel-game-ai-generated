@@ -1,7 +1,5 @@
 # Voxel Game
 
-![Game Banner](images/banner.png)
-
 ## Description
 
 A 3D voxel-based game built with Go and OpenGL. This project implements a Minecraft-inspired world with procedural terrain generation, block manipulation, and a simple user interface.
@@ -19,22 +17,25 @@ A 3D voxel-based game built with Go and OpenGL. This project implements a Minecr
 ## Screenshots
 
 ### World Generation
+![Pause Menu](.github/images/menu.png)
+![Gameplay](.github/images/gameplay.gif)
 
-![World Generation](images/world.png)
+### Blocks
+#### Dirt
+![Dirt](.github/images/dirt-example.png)
+#### Gravel
+![Gravel](.github/images/gravel-example.png)
+#### Sand
+![Sand](.github/images/sand-example.png)
+#### Stone
+![Stone](.github/images/stone-example.png)
+#### Tree
+![Tree](.github/images/tree-example.png)
+#### Water
+![Water](.github/images/water-example.png)
 
 *Caption: Procedurally generated terrain with different block types*
 
-### Game Interface
-
-![Game Interface](images/interface.png)
-
-*Caption: In-game UI showing player information*
-
-### Building Example
-
-![Building Example](images/building.png)
-
-*Caption: Example of player-built structure*
 
 ## Installation
 
@@ -48,8 +49,8 @@ A 3D voxel-based game built with Go and OpenGL. This project implements a Minecr
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/voxelgame.git
-   cd voxelgame
+   git clone https://github.com/Ahuge/voxel-game-ai-generated.git
+   cd voxel-game-ai-generated
    ```
 
 2. Install dependencies:
@@ -69,14 +70,9 @@ A 3D voxel-based game built with Go and OpenGL. This project implements a Minecr
 |---------------|----------------------|
 | W, A, S, D    | Move                 |
 | Space         | Jump                 |
-| Left Click    | Destroy Block        |
-| Right Click   | Place Block          |
-| E             | Open Inventory       |
+| Right Click    | Destroy Block       |
 | ESC           | Pause Menu           |
 | Mouse         | Look Around          |
-| 1-9           | Select Hotbar Item   |
-| F             | Toggle Flight Mode   |
-| Shift         | Sneak/Descend        |
 
 ## Development
 
@@ -134,5 +130,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [MathGL](https://github.com/go-gl/mathgl) - Math library for OpenGL
 
 ---
-
-*Note: To add images, create an `images` directory and place your screenshots there, then update the image paths in this README.*
